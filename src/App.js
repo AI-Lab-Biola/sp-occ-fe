@@ -11,6 +11,7 @@ function App() {
     const [data, setData] = useState(null);  // API data
     const [question, setQuestion] = useState('');  // Question input
     const [aiResponse, setAiResponse] = useState('');  // AI response
+    const [loading, setLoading] = useState(false);  // Loading state for submission
 
     useEffect(() => {
         // Fetch message from backend
@@ -31,7 +32,7 @@ function App() {
         const provider = new GoogleAuthProvider();
         try {
             const result = await signInWithPopup(auth, provider);  // Sign in with popup
-            const idToken = await result.user.getIdToken();  // Get ID token
+            const idToken = await result.user.getIdToken(true);  // Force refresh the token
 
             // Send ID token to backend for verification
             const response = await axios.post('http://localhost:3001/api/google-signin', { idToken });
@@ -48,22 +49,39 @@ function App() {
         setUser(null);
     };
 
-    // Handle question submission
+    // Handle question submission and retrieve AI response
     const handleSubmitQuestion = async () => {
         if (!question) {
             alert('Please enter a question!');
             return;
         }
 
+        if (!user) {
+            alert('User is not logged in!');
+            return;
+        }
+
+        setLoading(true);  // Set loading state
+        setAiResponse('');  // Clear previous AI response
+
         try {
-            // Send the question to the backend API for storing in Firebase and getting AI response
-            const response = await axios.post('http://localhost:3001/api/store-question', { question });
-            alert('Question submitted successfully!');
-            setAiResponse(response.data.answer);  // Set the AI response from the backend
+            // Log the data being sent
+            console.log('Submitting question:', { question, userId: user.uid });
+
+            // Send the question and userId to the backend API
+            const response = await axios.post('http://localhost:3001/api/store-question', {
+                question,
+                userId: user.uid  // Include the user ID
+            });
+
+            // Set the AI response from the backend
+            setAiResponse(response.data.answer);
             setQuestion('');  // Clear the input after submission
         } catch (error) {
             console.error('Error submitting question:', error);
             alert('Error submitting question');
+        } finally {
+            setLoading(false);  // Reset loading state
         }
     };
 
@@ -94,11 +112,15 @@ function App() {
                                 cols="50"
                             />
                             <br />
-                            <button onClick={handleSubmitQuestion}>Submit Question</button>
+                            <button onClick={handleSubmitQuestion} disabled={loading}>
+                                {loading ? 'Submitting...' : 'Submit Question'}
+                            </button>
                         </div>
 
                         {/* Display AI response */}
-                        {aiResponse && (
+                        {loading ? (
+                            <p>Loading AI response...</p>
+                        ) : aiResponse && (
                             <div>
                                 <h2>AI Response:</h2>
                                 <p>{aiResponse}</p>
